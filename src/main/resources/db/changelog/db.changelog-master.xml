@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <include file="changes/001-create-taxonomy-tables.xml" relativeToChangelogFile="true"/>
+    <include file="changes/002-create-product-tables.xml" relativeToChangelogFile="true"/>
+    <include file="changes/003-create-user-tables.xml" relativeToChangelogFile="true"/>
+    <include file="changes/004-create-order-tables.xml" relativeToChangelogFile="true"/>
+    <!-- <include file="changes/005-add-admin-permissions.xml" relativeToChangelogFile="true"/> -->
+    <include file="changes/005-add-order-permissions.xml" relativeToChangelogFile="true"/>
+    <include file="changes/006-create-reviews-table.xml" relativeToChangelogFile="true"/>
+    <include file="changes/007-create-review-images-table.xml" relativeToChangelogFile="true"/>
+    <include file="changes/008-create-vouchers-table.xml" relativeToChangelogFile="true"/>
+    <include file="changes/009-create-voucher-usages-table.xml" relativeToChangelogFile="true"/>
+    <include file="changes/010-create-addresses-table.xml" relativeToChangelogFile="true"/>
+    <include file="changes/011-add-customer-profile-fields.xml" relativeToChangelogFile="true"/>
+    <include file="changes/012-add-order-voucher-fields.xml" relativeToChangelogFile="true"/>
+    <include file="changes/013-add-product-rating-fields.xml" relativeToChangelogFile="true"/>
+    <include file="changes/014-add-product-created-at.xml" relativeToChangelogFile="true"/>
+    <include file="changes/015-add-ghn-fields-to-address-order.xml" relativeToChangelogFile="true"/>
+
+</databaseChangeLog>
