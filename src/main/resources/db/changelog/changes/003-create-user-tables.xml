@@ -1,0 +1,193 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="20251117-user-01" author="minh">
+        <createTable tableName="users">
+            <column name="id" type="INT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="email" type="VARCHAR(100)">
+                <constraints nullable="false" unique="true"/>
+            </column>
+            <column name="password" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="fullname" type="VARCHAR(100)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="photo" type="VARCHAR(255)"/>
+            <column name="status" type="VARCHAR(20)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="auth_provider" type="VARCHAR(20)" defaultValue="LOCAL">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="TIMESTAMP WITH TIME ZONE" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+
+    <changeSet id="20251117-user-02" author="minh">
+        <createTable tableName="roles">
+            <column name="id" type="INT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="name" type="VARCHAR(50)">
+                <constraints nullable="false" unique="true"/>
+            </column>
+            <column name="description" type="TEXT"/>
+        </createTable>
+    </changeSet>
+
+    <changeSet id="20251117-user-03" author="minh">
+        <createTable tableName="permissions">
+            <column name="id" type="INT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="name" type="VARCHAR(100)">
+                <constraints nullable="false" unique="true"/>
+            </column>
+            <column name="description" type="TEXT"/>
+        </createTable>
+    </changeSet>
+
+    <changeSet id="20251117-user-04" author="minh">
+        <createTable tableName="role_permissions">
+            <column name="role_id" type="INT">
+                <constraints nullable="false" foreignKeyName="fk_rp_role" referencedTableName="roles" referencedColumnNames="id"/>
+            </column>
+            <column name="permission_id" type="INT">
+                <constraints nullable="false" foreignKeyName="fk_rp_permission" referencedTableName="permissions" referencedColumnNames="id"/>
+            </column>
+        </createTable>
+        <addPrimaryKey tableName="role_permissions" columnNames="role_id, permission_id"/>
+    </changeSet>
+
+    <changeSet id="20251117-user-05" author="minh">
+        <createTable tableName="customers">
+            <column name="id" type="INT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="user_id" type="INT">
+                <constraints nullable="false" unique="true" foreignKeyName="fk_customer_user" referencedTableName="users" referencedColumnNames="id"/>
+            </column>
+            <column name="full_name" type="VARCHAR(100)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="phone_number" type="VARCHAR(20)">
+                <constraints unique="true"/>
+            </column>
+            <column name="photo" type="VARCHAR(255)"/>
+            <column name="bio" type="VARCHAR(200)"/>
+            </createTable>
+    </changeSet>
+
+    <changeSet id="20251117-user-06" author="minh">
+        <createTable tableName="employees">
+            <column name="id" type="INT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="employee_code" type="VARCHAR(20)">
+                <constraints nullable="false" unique="true"/>
+            </column>
+            <column name="user_id" type="INT">
+                <constraints nullable="false" unique="true" foreignKeyName="fk_employee_user" referencedTableName="users" referencedColumnNames="id"/>
+            </column>
+            <column name="fullname" type="VARCHAR(100)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="position" type="VARCHAR(100)"/>
+            <column name="department" type="VARCHAR(100)"/>
+            <column name="hired_date" type="DATE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="is_active" type="BOOLEAN" defaultValueBoolean="true"/>
+        </createTable>
+    </changeSet>
+
+    <changeSet id="20251117-user-07" author="minh">
+        <createTable tableName="employee_roles">
+            <column name="employee_id" type="INT">
+                <constraints nullable="false" foreignKeyName="fk_er_employee" referencedTableName="employees" referencedColumnNames="id"/>
+            </column>
+            <column name="role_id" type="INT">
+                <constraints nullable="false" foreignKeyName="fk_er_role" referencedTableName="roles" referencedColumnNames="id"/>
+            </column>
+        </createTable>
+        <addPrimaryKey tableName="employee_roles" columnNames="employee_id, role_id"/>
+    </changeSet>
+
+    <changeSet id="20251117-user-08" author="minh">
+        <createTable tableName="user_sessions">
+            <column name="id" type="UUID">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="user_id" type="INT">
+                <constraints nullable="false" foreignKeyName="fk_session_user" referencedTableName="users" referencedColumnNames="id"/>
+            </column>
+            <column name="refresh_token" type="TEXT">
+                <constraints nullable="false" unique="true"/>
+            </column>
+            <column name="user_agent" type="TEXT"/>
+            <column name="ip_address" type="VARCHAR(45)"/>
+            <column name="expires_at" type="TIMESTAMP WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="TIMESTAMP WITH TIME ZONE" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <createTable tableName="user_activation_tokens">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="token" type="VARCHAR(255)">
+                <constraints nullable="false" unique="true"/>
+            </column>
+            <column name="user_id" type="INT">
+                <constraints nullable="false" foreignKeyName="fk_activation_user" referencedTableName="users" referencedColumnNames="id"/>
+            </column>
+            <column name="expires_at" type="TIMESTAMP WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <createTable tableName="password_reset_tokens">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="token" type="VARCHAR(255)">
+                <constraints nullable="false" unique="true"/>
+            </column>
+            <column name="user_id" type="INT">
+                <constraints nullable="false" foreignKeyName="fk_reset_user" referencedTableName="users" referencedColumnNames="id"/>
+            </column>
+            <column name="expires_at" type="TIMESTAMP WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        
+         <createTable tableName="user_activity_logs">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="user_id" type="INT">
+                 <constraints nullable="true" foreignKeyName="fk_log_user" referencedTableName="users" referencedColumnNames="id"/>
+            </column>
+            <column name="action" type="VARCHAR(255)">
+                 <constraints nullable="false"/>
+            </column>
+            <column name="details" type="JSONB"/>
+            <column name="created_at" type="TIMESTAMP WITH TIME ZONE" defaultValueComputed="CURRENT_TIMESTAMP">
+                 <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+
+</databaseChangeLog>
