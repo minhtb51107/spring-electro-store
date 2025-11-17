@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="20251117-08-add-order-permissions" author="minh">
+        <insert tableName="permissions">
+            <column name="name" value="VIEW_ALL_ORDERS"/>
+            <column name="description" value="Quyền xem tất cả đơn hàng của mọi khách hàng"/>
+        </insert>
+        <insert tableName="permissions">
+            <column name="name" value="UPDATE_ORDER_STATUS"/>
+            <column name="description" value="Quyền cập nhật trạng thái đơn hàng (đóng gói, giao hàng...)"/>
+        </insert>
+        <insert tableName="permissions">
+            <column name="name" value="VIEW_DASHBOARD_STATS"/>
+            <column name="description" value="Quyền xem thống kê doanh thu trên dashboard"/>
+        </insert>
+    </changeSet>
+
+</databaseChangeLog>

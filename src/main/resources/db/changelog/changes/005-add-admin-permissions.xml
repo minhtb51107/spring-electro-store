@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="20251120-05-add-admin-permissions" author="minh">
+        <!-- Thêm quyền quản lý đơn hàng -->
+        <insert tableName="permissions">
+            <column name="name" value="MANAGE_ORDERS"/>
+            <column name="description" value="Quản lý đơn hàng (Xem, cập nhật trạng thái)"/>
+        </insert>
+
+        <!-- Gán quyền này cho Role ADMIN (id=1) -->
+        <!-- Giả sử role_id 1 là ADMIN. Nếu ID khác, hãy sửa lại -->
+        <insert tableName="role_permissions">
+            <column name="role_id" valueNumeric="1"/>
+            <column name="permission_id" valueComputed="(SELECT id FROM permissions WHERE name = 'MANAGE_ORDERS')"/>
+        </insert>
+    </changeSet>
+
+</databaseChangeLog>
