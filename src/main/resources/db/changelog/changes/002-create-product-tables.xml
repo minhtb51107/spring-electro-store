@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="20251117-03-create-products-table" author="minh">
+        <createTable tableName="products">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="name" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="slug" type="VARCHAR(255)">
+                <constraints nullable="false" unique="true"/>
+            </column>
+            <column name="description" type="TEXT"/>
+            <column name="short_description" type="TEXT"/>
+            <column name="is_active" type="BOOLEAN" defaultValueBoolean="true"/>
+            <column name="category_id" type="BIGINT">
+                <constraints nullable="true"/> </column>
+            <column name="brand_id" type="BIGINT">
+                <constraints nullable="true"/> </column>
+        </createTable>
+    </changeSet>
+
+    <changeSet id="20251117-04-create-product-variants-table" author="minh">
+        <createTable tableName="product_variants">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="product_id" type="BIGINT">
+                <constraints nullable="false"/> </column>
+            <column name="sku" type="VARCHAR(50)">
+                <constraints nullable="false" unique="true"/>
+            </column>
+            <column name="price" type="DECIMAL(19, 4)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="stock_quantity" type="INT" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="color" type="VARCHAR(100)"/>
+            <column name="storage" type="VARCHAR(50)"/>
+            <column name="ram" type="VARCHAR(50)"/>
+        </createTable>
+    </changeSet>
+
+    <changeSet id="20251117-05-create-product-images-table" author="minh">
+        <createTable tableName="product_images">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="product_variant_id" type="BIGINT">
+                <constraints nullable="false"/> </column>
+            <column name="image_url" type="VARCHAR(500)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="is_thumbnail" type="BOOLEAN" defaultValueBoolean="false"/>
+        </createTable>
+    </changeSet>
+
+    <changeSet id="20251117-05a-add-product-fks" author="minh">
+        <addForeignKeyConstraint baseTableName="products"
+                                 baseColumnNames="category_id"
+                                 constraintName="fk_product_category"
+                                 referencedTableName="categories"
+                                 referencedColumnNames="id"
+                                 onDelete="SET NULL"/>
+                                 
+        <addForeignKeyConstraint baseTableName="products"
+                                 baseColumnNames="brand_id"
+                                 constraintName="fk_product_brand"
+                                 referencedTableName="brands"
+                                 referencedColumnNames="id"
+                                 onDelete="SET NULL"/>
+                                 
+        <addForeignKeyConstraint baseTableName="product_variants"
+                                 baseColumnNames="product_id"
+                                 constraintName="fk_variant_product"
+                                 referencedTableName="products"
+                                 referencedColumnNames="id"
+                                 onDelete="CASCADE"/>
+                                 
+        <addForeignKeyConstraint baseTableName="product_images"
+                                 baseColumnNames="product_variant_id"
+                                 constraintName="fk_image_variant"
+                                 referencedTableName="product_variants"
+                                 referencedColumnNames="id"
+                                 onDelete="CASCADE"/>
+    </changeSet>
+
+</databaseChangeLog>
