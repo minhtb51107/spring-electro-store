@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="20251120-01-create-vouchers" author="minh">
+        <createTable tableName="vouchers">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="code" type="VARCHAR(50)">
+                <constraints nullable="false" unique="true"/>
+            </column>
+            <column name="description" type="VARCHAR(255)"/>
+            <column name="discount_type" type="VARCHAR(20)"/>
+            <column name="discount_value" type="DECIMAL(19,4)"/>
+            <column name="max_discount_amount" type="DECIMAL(19,4)"/>
+            <column name="min_order_amount" type="DECIMAL(19,4)"/>
+            <column name="start_date" type="TIMESTAMP WITH TIME ZONE"/>
+            <column name="end_date" type="TIMESTAMP WITH TIME ZONE"/>
+            <column name="usage_limit" type="INT" defaultValueNumeric="0"/>
+            <column name="used_count" type="INT" defaultValueNumeric="0"/>
+            <column name="active" type="BOOLEAN" defaultValueBoolean="true"/>
+        </createTable>
+    </changeSet>
+</databaseChangeLog>
