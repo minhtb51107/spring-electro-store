@@ -1,0 +1,141 @@
+version: '3.8'
+
+services:
+  # 1. APP SPRING BOOT (BACKEND)
+  backend:
+    build: .
+    container_name: electro-backend
+    ports:
+      - "8080:8080"
+    environment:
+      # --- DATABASE ---
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres-db:5432/electro_store
+      - SPRING_DATASOURCE_USERNAME=postgres
+      - SPRING_DATASOURCE_PASSWORD=511007
+
+      # --- REDIS ---
+      - SPRING_DATA_REDIS_HOST=redis-cache
+      - SPRING_DATA_REDIS_PORT=6379
+
+      # --- ELASTICSEARCH ---
+      - SPRING_ELASTICSEARCH_URIS=http://elasticsearch:9200
+      - SPRING_ELASTICSEARCH_USERNAME=elastic
+      - SPRING_ELASTICSEARCH_PASSWORD=511007
+      - SPRING_ELASTICSEARCH_CONNECTION_TIMEOUT=10s
+      - SPRING_ELASTICSEARCH_SOCKET_TIMEOUT=10s
+
+      # --- JWT (BÍ MẬT - Lấy từ .env) ---
+      - APP_JWT_SECRET=${APP_JWT_SECRET}
+
+      # --- EMAIL (BÍ MẬT - Lấy từ .env) ---
+      - SPRING_MAIL_USERNAME=${SPRING_MAIL_USERNAME}
+      - SPRING_MAIL_PASSWORD=${SPRING_MAIL_PASSWORD}
+
+      # --- GOOGLE (BÍ MẬT - Lấy từ .env) ---
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+
+      # --- VNPAY (BÍ MẬT - Lấy từ .env) ---
+      - VNPAY_TMN_CODE=${VNPAY_TMN_CODE}
+      - VNPAY_HASH_SECRET=${VNPAY_HASH_SECRET}
+      # URL callback trỏ về backend trong container hoặc qua ngrok nếu test local
+      - VNPAY_RETURN_URL=http://localhost:8080/api/v1/payment/vn-pay-callback
+
+      # --- CLOUDINARY (BÍ MẬT - Lấy từ .env) ---
+      - CLOUDINARY_CLOUD_NAME=${CLOUDINARY_CLOUD_NAME}
+      - CLOUDINARY_API_KEY=${CLOUDINARY_API_KEY}
+      - CLOUDINARY_API_SECRET=${CLOUDINARY_API_SECRET}
+
+      # --- GIAO HANG NHANH (GHN) - BỔ SUNG ---
+      # Token GHN cũng là secret, nên lấy từ .env
+      - GHN_API_URL=https://dev-online-gateway.ghn.vn/shiip/public-api
+      - GHN_API_TOKEN=${GHN_API_TOKEN}
+      - GHN_SHOP_ID=6128401
+      - GHN_SENDER_DISTRICT_ID=1460
+
+    # QUAN TRỌNG: Chỉ khởi động backend KHI các service kia đã SẴN SÀNG (healthy)
+    depends_on:
+      postgres-db:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+      redis-cache:
+        condition: service_started
+    networks:
+      - electro-network
+
+  # 2. DATABASE
+  postgres-db:
+    image: postgres:15-alpine
+    container_name: electro-postgres
+    environment:
+      - POSTGRES_DB=electro_store
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=511007
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - electro-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d electro_store"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # 3. CACHE
+  redis-cache:
+    image: redis:7-alpine
+    container_name: electro-redis
+    ports:
+      - "6379:6379"
+    networks:
+      - electro-network
+
+  # 4. SEARCH
+  elasticsearch:
+    image: elasticsearch:8.11.1
+    container_name: electro-elastic
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=true
+      - ELASTIC_PASSWORD=511007
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    ports:
+      - "9200:9200"
+    volumes:
+      - es-data:/usr/share/elasticsearch/data
+    networks:
+      - electro-network
+    # QUAN TRỌNG: Healthcheck cho Elasticsearch
+    # Lệnh này sẽ thử kết nối vào ES bằng curl. Nếu trả về 200 (hoặc status: green/yellow) thì coi là healthy.
+    # -u elastic:511007 : Dùng user/pass để xác thực
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s -u elastic:511007 http://localhost:9200/_cluster/health | grep -q 'status'"]
+      interval: 10s
+      timeout: 10s
+      retries: 120 # Thử lại nhiều lần (vì ES khởi động lâu)
+      start_period: 20s # Chờ 20s trước khi check lần đầu
+
+  # 5. GUI (PgAdmin) - Optional
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: electro-pgadmin
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=admin@admin.com
+      - PGADMIN_DEFAULT_PASSWORD=admin
+    ports:
+      - "5050:80"
+    depends_on:
+      - postgres-db
+    networks:
+      - electro-network
+
+volumes:
+  postgres-data:
+  es-data:
+
+networks:
+  electro-network:
+    driver: bridge
