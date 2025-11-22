@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="20251121-01-add-ghn-to-address" author="minh">
+        <addColumn tableName="addresses">
+            <column name="ghn_district_id" type="INT"/>
+            <column name="ghn_ward_code" type="VARCHAR(50)"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="20251121-02-add-shipping-fee-to-order" author="minh">
+        <addColumn tableName="orders">
+            <column name="shipping_fee" type="DECIMAL(19, 4)" defaultValueNumeric="0"/>
+        </addColumn>
+    </changeSet>
+
+</databaseChangeLog>
