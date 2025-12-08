@@ -1,28 +1,32 @@
 package com.minh.springelectrostore.config;
 
+import org.springframework.aop.interceptor.AsyncUncaughtExceptionHandler;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.scheduling.annotation.AsyncConfigurer; // Import này
 import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
 import java.util.concurrent.Executor;
 
 @Configuration
-@EnableAsync // Bật tính năng xử lý bất đồng bộ của Spring
-public class AsyncConfig {
+@EnableAsync
+public class AsyncConfig implements AsyncConfigurer { // Implement Interface này
 
-    /**
-     * Định nghĩa một bean Executor tùy chỉnh cho các tác vụ bất đồng bộ.
-     * Bean này sẽ có tên là "taskExecutor" theo tên phương thức.
-     */
     @Bean(name = "taskExecutor")
-    public Executor taskExecutor() {
+    @Override // Override method getAsyncExecutor
+    public Executor getAsyncExecutor() {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
-        executor.setCorePoolSize(2);      // Số luồng cơ bản trong pool
-        executor.setMaxPoolSize(5);       // Số luồng tối đa
-        executor.setQueueCapacity(500);   // Sức chứa của hàng đợi
-        executor.setThreadNamePrefix("Async-");
+        executor.setCorePoolSize(5);
+        executor.setMaxPoolSize(20); // Tăng lên chút cho thoải mái
+        executor.setQueueCapacity(500);
+        executor.setThreadNamePrefix("ElectroWorker-");
         executor.initialize();
         return executor;
+    }
+
+    @Override // Override method xử lý lỗi
+    public AsyncUncaughtExceptionHandler getAsyncUncaughtExceptionHandler() {
+        return new AsyncExceptionHandler();
     }
 }

@@ -14,7 +14,7 @@ import java.security.cert.X509Certificate;
 import java.time.Duration;
 
 @Configuration
-@EnableElasticsearchRepositories(basePackages = "com.minh.springelectrostore.search.repository")
+@EnableElasticsearchRepositories(basePackages = "com.minh.springelectrostore.modules.search.repository")
 public class ElasticsearchConfig extends ElasticsearchConfiguration {
 
 	@Value("${spring.elasticsearch.uris}")

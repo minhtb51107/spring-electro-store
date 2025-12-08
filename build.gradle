@@ -95,6 +95,12 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-data-elasticsearch'
     
     implementation 'com.cloudinary:cloudinary-http44:1.36.0'
+    
+    implementation 'org.springframework.boot:spring-boot-starter-data-redis'
+    
+    implementation 'org.redisson:redisson-spring-boot-starter:3.24.3'
+    
+    implementation 'org.jsoup:jsoup:1.17.2'
 }
 
 tasks.named('test') {

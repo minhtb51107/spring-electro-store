@@ -12,9 +12,9 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.minh.springelectrostore.user.entity.Employee;
-import com.minh.springelectrostore.user.entity.User;
-import com.minh.springelectrostore.user.repository.UserRepository;
+import com.minh.springelectrostore.modules.user.entity.Employee;
+import com.minh.springelectrostore.modules.user.entity.User;
+import com.minh.springelectrostore.modules.user.repository.UserRepository;
 
 import lombok.RequiredArgsConstructor;
 
