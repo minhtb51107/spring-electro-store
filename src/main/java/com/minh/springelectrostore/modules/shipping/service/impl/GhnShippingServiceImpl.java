@@ -67,13 +67,16 @@ public class GhnShippingServiceImpl implements ShippingService {
             if (response != null && response.getCode() == 200 && response.getData() != null) {
                 return BigDecimal.valueOf(response.getData().getTotal());
             } else {
-                log.error("GHN Error: {}", response != null ? response.getMessage() : "Unknown");
-                throw new BadRequestException("Không thể tính phí vận chuyển lúc này.");
+                // Lấy message lỗi từ GHN để hiển thị rõ ràng
+                String msg = response != null ? response.getMessage() : "Lỗi không xác định từ GHN";
+                log.error("GHN Error: {}", msg);
+                throw new BadRequestException("GHN Error: " + msg);
             }
         } catch (Exception e) {
             log.error("Error calling GHN API", e);
-            // Fallback: Trả về phí cố định nếu lỗi (ví dụ 30k) để không chặn user mua hàng
-            return BigDecimal.valueOf(30000); 
+            // [QUAN TRỌNG] XÓA DÒNG return 30000;
+            // Thay bằng ném exception để OrderService biết mà dừng lại
+            throw new BadRequestException(e.getMessage()); 
         }
     }
 }

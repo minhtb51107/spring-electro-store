@@ -13,6 +13,7 @@ import org.springframework.data.redis.cache.RedisCacheManager;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.serializer.GenericJackson2JsonRedisSerializer;
+import org.springframework.data.redis.serializer.RedisSerializationContext;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
 
 import java.time.Duration;
@@ -33,41 +34,38 @@ public class RedisConfig {
         Config config = new Config();
         config.useSingleServer()
               .setAddress("redis://" + redisHost + ":" + redisPort)
-              // --- CẤU HÌNH GIẢM TẢI BỘ NHỚ ---
-              // Giảm số lượng kết nối tối thiểu và tối đa để tránh lỗi OutOfMemory Direct Buffer
-              .setConnectionMinimumIdleSize(2) // Mặc định là 24 (quá lớn cho dev local)
-              .setConnectionPoolSize(4);       // Mặc định là 64
+              .setConnectionMinimumIdleSize(2) 
+              .setConnectionPoolSize(4);       
               
         return Redisson.create(config);
     }
 
-    // 2. Cấu hình Cache Manager (Cho @Cacheable)
     @Bean
-    public CacheManager cacheManager(RedisConnectionFactory connectionFactory) {
+    public RedisCacheManager cacheManager(RedisConnectionFactory connectionFactory) {
         RedisCacheConfiguration config = RedisCacheConfiguration.defaultCacheConfig()
-                .entryTtl(Duration.ofMinutes(60))
-                .disableCachingNullValues();
+                .entryTtl(Duration.ofHours(1)) // Mặc định cache tồn tại 1 giờ
+                .disableCachingNullValues()
+                .serializeKeysWith(RedisSerializationContext.SerializationPair.fromSerializer(new StringRedisSerializer()))
+                .serializeValuesWith(RedisSerializationContext.SerializationPair.fromSerializer(new GenericJackson2JsonRedisSerializer()));
 
         return RedisCacheManager.builder(connectionFactory)
                 .cacheDefaults(config)
                 .build();
     }
 
-    // 3. Cấu hình RedisTemplate (Cho CartService và các thao tác thủ công)
     @Bean
     public RedisTemplate<String, Object> redisTemplate(RedisConnectionFactory connectionFactory) {
         RedisTemplate<String, Object> template = new RedisTemplate<>();
         template.setConnectionFactory(connectionFactory);
 
-        // Sử dụng String serializer cho Key
+        // Key là String
         template.setKeySerializer(new StringRedisSerializer());
-        template.setHashKeySerializer(new StringRedisSerializer());
-
-        // Sử dụng JSON serializer cho Value (để lưu object dưới dạng JSON)
+        
+        // Value có thể là Object (UserSession data) hoặc String
         template.setValueSerializer(new GenericJackson2JsonRedisSerializer());
+        template.setHashKeySerializer(new StringRedisSerializer());
         template.setHashValueSerializer(new GenericJackson2JsonRedisSerializer());
 
-        template.afterPropertiesSet();
         return template;
     }
 }

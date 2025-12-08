@@ -36,7 +36,15 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-security'
 	implementation 'org.springframework.boot:spring-boot-starter-web'
 	implementation 'org.springframework.boot:spring-boot-starter-validation'
-	implementation 'org.springframework.boot:spring-boot-starter-websocket' // *** THÊM DÒNG NÀY ***
+	implementation 'org.springframework.boot:spring-boot-starter-websocket'
+    implementation 'org.springframework.boot:spring-boot-starter-mail'
+    implementation 'org.springframework.boot:spring-boot-starter-oauth2-client'
+    
+    // --- Data & Cache ---
+    // [QUAN TRỌNG] Chỉ giữ 1 dòng này thôi
+    implementation 'org.springframework.boot:spring-boot-starter-data-redis' 
+    implementation 'org.springframework.boot:spring-boot-starter-data-elasticsearch'
+    implementation 'org.redisson:redisson-spring-boot-starter:3.24.3'
 
 	// --- Lombok ---
 	compileOnly 'org.projectlombok:lombok'
@@ -45,18 +53,25 @@ dependencies {
 	// --- MapStruct ---
 	implementation "org.mapstruct:mapstruct:${mapstructVersion}"
 	annotationProcessor "org.mapstruct:mapstruct-processor:${mapstructVersion}"
-	// Binding để Lombok và MapStruct hoạt động cùng nhau
 	annotationProcessor "org.projectlombok:lombok-mapstruct-binding:${lombokMapstructBindingVersion}"
-
 
 	// --- DB & Dev ---
 	developmentOnly 'org.springframework.boot:spring-boot-devtools'
 	runtimeOnly 'org.postgresql:postgresql'
+    implementation 'org.liquibase:liquibase-core'
 
 	// --- JWT ---
     implementation 'io.jsonwebtoken:jjwt-api:0.11.5'
     runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.11.5'
     runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.11.5'
+
+    // --- Utils ---
+	implementation 'com.google.api-client:google-api-client:2.3.0'
+    implementation 'com.google.oauth-client:google-oauth-client-jetty:1.35.0'
+    implementation 'com.google.http-client:google-http-client-jackson2:1.45.1'
+    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.5.0'
+    implementation 'com.cloudinary:cloudinary-http44:1.36.0'
+    implementation 'org.jsoup:jsoup:1.17.2'
 
 	// --- Test ---
 	testImplementation 'org.springframework.boot:spring-boot-starter-test'
@@ -65,42 +80,16 @@ dependencies {
 	testCompileOnly 'org.projectlombok:lombok'
     testAnnotationProcessor 'org.projectlombok:lombok'
     
-    testImplementation 'org.testng:testng:7.10.2' // Hoặc phiên bản mới hơn
-	testImplementation 'org.mockito:mockito-testng:0.4.31' // Hoặc phiên bản tương thích
-	
-	// build.gradle
-	testImplementation 'org.seleniumhq.selenium:selenium-java:4.23.0' // Hoặc phiên bản mới hơn
-	testImplementation 'io.github.bonigarcia:webdrivermanager:5.9.1' // Quản lý driver
-	testImplementation 'org.testng:testng:7.10.2' // TestNG
-
-    // Mockito
+    // Mockito & TestNG & Selenium
+	testImplementation 'org.testng:testng:7.10.2'
+	testImplementation 'org.mockito:mockito-testng:0.4.31'
+	testImplementation 'org.seleniumhq.selenium:selenium-java:4.23.0'
+	testImplementation 'io.github.bonigarcia:webdrivermanager:5.9.1'
 	testImplementation("org.mockito:mockito-core:5.18.0")
     testImplementation 'org.mockito:mockito-junit-jupiter:5.11.0'
-
-    implementation 'org.liquibase:liquibase-core'
-
-    implementation 'org.springframework.boot:spring-boot-starter-oauth2-client'
-
-	// Google API Client for OAuth2
-	implementation 'com.google.api-client:google-api-client:2.3.0'
-    implementation 'com.google.oauth-client:google-oauth-client-jetty:1.35.0'
-    implementation 'com.google.http-client:google-http-client-jackson2:1.45.1'
-
-    implementation 'org.springframework.boot:spring-boot-starter-mail'
-
-    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.5.0'
     
-    implementation 'org.springframework.boot:spring-boot-starter-data-redis'
-    
-    implementation 'org.springframework.boot:spring-boot-starter-data-elasticsearch'
-    
-    implementation 'com.cloudinary:cloudinary-http44:1.36.0'
-    
-    implementation 'org.springframework.boot:spring-boot-starter-data-redis'
-    
-    implementation 'org.redisson:redisson-spring-boot-starter:3.24.3'
-    
-    implementation 'org.jsoup:jsoup:1.17.2'
+    implementation 'org.springframework.retry:spring-retry'
+    implementation 'org.springframework:spring-aspects'
 }
 
 tasks.named('test') {
@@ -110,6 +99,7 @@ tasks.named('test') {
 // Cấu hình trình biên dịch Java để tích hợp MapStruct và Lombok
 tasks.withType(JavaCompile).configureEach {
     options.compilerArgs += [
+        '-parameters', 
         "-Amapstruct.defaultComponentModel=spring",
         "-Amapstruct.unmappedTargetPolicy=IGNORE"
     ]

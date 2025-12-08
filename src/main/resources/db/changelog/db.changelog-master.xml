@@ -9,7 +9,6 @@
     <include file="changes/002-create-product-tables.xml" relativeToChangelogFile="true"/>
     <include file="changes/003-create-user-tables.xml" relativeToChangelogFile="true"/>
     <include file="changes/004-create-order-tables.xml" relativeToChangelogFile="true"/>
-    <!-- <include file="changes/005-add-admin-permissions.xml" relativeToChangelogFile="true"/> -->
     <include file="changes/005-add-order-permissions.xml" relativeToChangelogFile="true"/>
     <include file="changes/006-create-reviews-table.xml" relativeToChangelogFile="true"/>
     <include file="changes/007-create-review-images-table.xml" relativeToChangelogFile="true"/>
@@ -21,5 +20,7 @@
     <include file="changes/013-add-product-rating-fields.xml" relativeToChangelogFile="true"/>
     <include file="changes/014-add-product-created-at.xml" relativeToChangelogFile="true"/>
     <include file="changes/015-add-ghn-fields-to-address-order.xml" relativeToChangelogFile="true"/>
+    
+    <include file="changes/016-optimizing-indexes.xml" relativeToChangelogFile="true"/>
 
 </databaseChangeLog>

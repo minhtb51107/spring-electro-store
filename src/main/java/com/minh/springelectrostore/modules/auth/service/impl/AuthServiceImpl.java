@@ -6,8 +6,10 @@ import java.time.OffsetDateTime;
 import java.util.Collections;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -27,10 +29,9 @@ import com.minh.springelectrostore.common.service.EmailService;
 import com.minh.springelectrostore.common.util.JwtUtil;
 import com.minh.springelectrostore.modules.auth.entity.PasswordResetToken;
 import com.minh.springelectrostore.modules.auth.entity.UserActivationToken;
-import com.minh.springelectrostore.modules.auth.entity.UserSession;
 import com.minh.springelectrostore.modules.auth.repository.PasswordResetTokenRepository;
 import com.minh.springelectrostore.modules.auth.repository.UserActivationTokenRepository;
-import com.minh.springelectrostore.modules.auth.repository.UserSessionRepository;
+// import com.minh.springelectrostore.modules.auth.repository.UserSessionRepository; // Không dùng Repository này nữa
 import com.minh.springelectrostore.modules.auth.request.ChangePasswordRequest;
 import com.minh.springelectrostore.modules.auth.request.ForgotPasswordRequest;
 import com.minh.springelectrostore.modules.auth.request.LoginRequest;
@@ -53,7 +54,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 
 @Service
-@RequiredArgsConstructor // Tự động inject các dependency final
+@RequiredArgsConstructor // Tự động inject các dependency final (bao gồm RedisTemplate)
 @Transactional
 public class AuthServiceImpl implements AuthService {
 
@@ -64,13 +65,19 @@ public class AuthServiceImpl implements AuthService {
     private final PasswordEncoder passwordEncoder;
     private final AuthenticationManager authenticationManager;
     private final JwtUtil jwtUtil;
-    private final UserSessionRepository userSessionRepository;
+    
+    // Đã loại bỏ UserSessionRepository vì chuyển sang dùng Redis
+    // private final UserSessionRepository userSessionRepository; 
+    
     private final UserActivityLogService userActivityLogService;
     private final PasswordResetTokenRepository passwordResetTokenRepository;
     private final UserMapper userMapper;
     
     private final UserActivationTokenRepository activationTokenRepository;
     private final EmailService emailService;
+    
+    // [QUAN TRỌNG] Inject RedisTemplate để thao tác với Redis
+    private final RedisTemplate<String, Object> redisTemplate;
     
     @Value("${spring.security.oauth2.client.registration.google.client-id}")
     private String googleClientId;
@@ -94,7 +101,7 @@ public class AuthServiceImpl implements AuthService {
         // 2. Tạo User
         User user = new User();
         user.setEmail(request.getEmail());
-        user.setFullname(request.getFullname()); // <--- ĐÃ SỬA: Thêm dòng này
+        user.setFullname(request.getFullname());
         user.setPassword(passwordEncoder.encode(request.getPassword()));
         user.setStatus(UserStatus.PENDING_ACTIVATION);
         
@@ -119,6 +126,10 @@ public class AuthServiceImpl implements AuthService {
                            "<p>Vui lòng nhấp vào liên kết dưới đây để kích hoạt tài khoản của bạn:</p>" +
                            "<a href=\"" + activationLink + "\">Kích hoạt ngay</a>" +
                            "<p>Liên kết này sẽ hết hạn trong 24 giờ.</p>";
+        // Lưu ý: Hàm này giờ đã có cơ chế Retry (nhờ @Retryable trong EmailWorker nếu bạn dùng Async)
+        // Tuy nhiên ở đây đang gọi trực tiếp EmailService (Sync). 
+        // Để tận dụng Async Retry, bạn nên gọi qua EmailWorker (cần inject EmailWorker thay vì EmailService).
+        // Nhưng tạm thời giữ nguyên logic Sync này để tránh thay đổi quá nhiều file.
         emailService.sendEmail(user.getEmail(), "Kích hoạt tài khoản MindRevol", emailBody);
     }
 
@@ -162,61 +173,60 @@ public class AuthServiceImpl implements AuthService {
             throw new DisabledException(message);
         }
 
+        // --- BỎ LOGIC CHECK SESSION TRONG DB ---
+        /*
         long sessionCount = userSessionRepository.countByUserId(user.getId());
         if (sessionCount >= maxConcurrentSessions) {
             userSessionRepository.findFirstByUserIdOrderByCreatedAtAsc(user.getId())
                     .ifPresent(userSessionRepository::delete);
         }
+        */
 
         String accessToken = jwtUtil.generateAccessToken(user);
         String refreshToken = jwtUtil.generateRefreshToken(user);
         
-        String userAgent = servletRequest.getHeader("User-Agent");
-        String ipAddress = getClientIp(servletRequest);
+        // --- THÊM LOGIC LƯU SESSION VÀO REDIS ---
+        // Key: "auth:refresh_token:{token_string}" -> Value: userEmail
+        String redisKey = "auth:refresh_token:" + refreshToken;
+        redisTemplate.opsForValue().set(redisKey, user.getEmail(), refreshTokenExpirationMs, TimeUnit.MILLISECONDS);
         
-        UserSession session = UserSession.builder()
-                .user(user)
-                .refreshToken(refreshToken)
-                .expiresAt(OffsetDateTime.now().plusSeconds(refreshTokenExpirationMs / 1000))
-                .userAgent(userAgent) 
-                .ipAddress(ipAddress)   
-                .build();
-        userSessionRepository.save(session);
+        // Ghi log hoạt động (bất đồng bộ hoặc đơn giản)
+        userActivityLogService.logActivity("LOGIN", "Đăng nhập hệ thống", user);
 
         return JwtResponse.builder()
                 .accessToken(accessToken)
                 .refreshToken(refreshToken)
                 .build();
     }
-
-    private String getClientIp(HttpServletRequest request) {
-        String remoteAddr = "";
-        if (request != null) {
-            remoteAddr = request.getHeader("X-FORWARDED-FOR");
-            if (remoteAddr == null || "".equals(remoteAddr)) {
-                remoteAddr = request.getRemoteAddr();
-            }
-        }
-        return remoteAddr;
-    }
     
     @Override
     public JwtResponse refreshToken(String refreshToken) {
-        UserSession session = userSessionRepository.findByRefreshToken(refreshToken)
-                .orElseThrow(() -> new BadRequestException("Refresh token không hợp lệ hoặc đã bị thu hồi."));
-
-        if (session.getExpiresAt().isBefore(OffsetDateTime.now())) {
-            userSessionRepository.delete(session); 
-            throw new BadRequestException("Refresh token đã hết hạn.");
+        // --- LOGIC MỚI VỚI REDIS ---
+        String redisKey = "auth:refresh_token:" + refreshToken;
+        
+        // 1. Kiểm tra token có tồn tại trong Redis không
+        Object emailObj = redisTemplate.opsForValue().get(redisKey);
+        
+        if (emailObj == null) {
+            throw new BadRequestException("Refresh token không hợp lệ hoặc đã hết hạn.");
         }
+        
+        String userEmail = (String) emailObj;
+        
+        // 2. Xóa token cũ ngay lập tức (Token Rotation - Chống Replay Attack)
+        redisTemplate.delete(redisKey);
 
-        User user = session.getUser();
+        // 3. Lấy thông tin user
+        User user = userRepository.findByEmail(userEmail)
+                .orElseThrow(() -> new ResourceNotFoundException("Người dùng không tồn tại."));
+
+        // 4. Tạo cặp token mới
         String newAccessToken = jwtUtil.generateAccessToken(user);
         String newRefreshToken = jwtUtil.generateRefreshToken(user);
 
-        session.setRefreshToken(newRefreshToken);
-        session.setExpiresAt(OffsetDateTime.now().plusSeconds(refreshTokenExpirationMs / 1000));
-        userSessionRepository.save(session);
+        // 5. Lưu token mới vào Redis
+        String newRedisKey = "auth:refresh_token:" + newRefreshToken;
+        redisTemplate.opsForValue().set(newRedisKey, userEmail, refreshTokenExpirationMs, TimeUnit.MILLISECONDS);
 
         return JwtResponse.builder()
                 .accessToken(newAccessToken)
@@ -241,26 +251,16 @@ public class AuthServiceImpl implements AuthService {
             User user = userRepository.findByEmail(email)
                     .orElseGet(() -> registerNewUserFromGoogle(payload));
             
-            long sessionCount = userSessionRepository.countByUserId(user.getId());
-            if (sessionCount >= maxConcurrentSessions) {
-                userSessionRepository.findFirstByUserIdOrderByCreatedAtAsc(user.getId())
-                        .ifPresent(userSessionRepository::delete);
-            }
-
+            // Bỏ logic UserSessionRepository cũ
+            
             String accessToken = jwtUtil.generateAccessToken(user);
             String refreshToken = jwtUtil.generateRefreshToken(user);
 
-            String userAgent = servletRequest.getHeader("User-Agent");
-            String ipAddress = getClientIp(servletRequest);
+            // Lưu vào Redis
+            String redisKey = "auth:refresh_token:" + refreshToken;
+            redisTemplate.opsForValue().set(redisKey, user.getEmail(), refreshTokenExpirationMs, TimeUnit.MILLISECONDS);
             
-            UserSession session = UserSession.builder()
-                    .user(user)
-                    .refreshToken(refreshToken)
-                    .expiresAt(OffsetDateTime.now().plusSeconds(refreshTokenExpirationMs / 1000))
-                    .userAgent(userAgent)
-                    .ipAddress(ipAddress)
-                    .build();
-            userSessionRepository.save(session);
+            userActivityLogService.logActivity("LOGIN_GOOGLE", "Đăng nhập qua Google", user);
             
             return JwtResponse.builder()
                     .accessToken(accessToken)
@@ -279,7 +279,7 @@ public class AuthServiceImpl implements AuthService {
 
         User newUser = new User();
         newUser.setEmail(email);
-        newUser.setFullname(name); // <--- ĐÃ SỬA: Thêm dòng này
+        newUser.setFullname(name);
         newUser.setPassword(passwordEncoder.encode(UUID.randomUUID().toString())); 
         newUser.setStatus(UserStatus.ACTIVE); 
         
@@ -366,11 +366,17 @@ public class AuthServiceImpl implements AuthService {
     
     @Override
     public void logout(String refreshToken) {
-        UserSession session = userSessionRepository.findByRefreshToken(refreshToken)
-                .orElseThrow(() -> new BadRequestException("Refresh token không hợp lệ."));
-
-        userSessionRepository.delete(session);
+        // --- LOGIC MỚI VỚI REDIS ---
+        String redisKey = "auth:refresh_token:" + refreshToken;
         
-        userActivityLogService.logActivity("LOGOUT", null, session.getUser()); 
+        // Xóa key khỏi Redis -> Token hết hạn ngay lập tức
+        Boolean deleted = redisTemplate.delete(redisKey);
+        
+        if (Boolean.FALSE.equals(deleted)) {
+            // Có thể token đã hết hạn từ trước, log warning nhẹ nhàng
+            // log.warn("Logout: Token không tồn tại hoặc đã hết hạn trong Redis.");
+        }
+        
+        // Có thể lấy user từ token để log activity nếu cần (tuy nhiên logic lấy user từ redis trước khi xóa sẽ tốn thêm 1 query)
     }
 }
