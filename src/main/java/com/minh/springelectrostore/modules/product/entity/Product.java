@@ -3,16 +3,15 @@ package com.minh.springelectrostore.modules.product.entity;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
-import org.hibernate.annotations.CreationTimestamp; // <--- Import này
+import lombok.*;
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
 
-import java.time.OffsetDateTime; // <--- Import này
-import java.util.Set;
+import java.time.OffsetDateTime;
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 
 @Getter
 @Setter
@@ -27,7 +26,6 @@ public class Product {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    // ... (Các trường cũ giữ nguyên: name, slug, description...)
     @NotBlank
     @Size(max = 255)
     @Column(nullable = false)
@@ -58,21 +56,33 @@ public class Product {
     @Column(name = "review_count")
     private Integer reviewCount = 0;
 
+    @Builder.Default
+    @Column(name = "sold_quantity")
+    private Long soldQuantity = 0L;
+
     @OneToMany(mappedBy = "product", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     @Builder.Default
     private Set<ProductVariant> variants = new HashSet<>();
+
+    // [FIX] XÓA list images đi vì ProductImage không map trực tiếp với Product
+    // ProductImage thuộc về ProductVariant
+
+    @OneToMany(mappedBy = "product", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    @Builder.Default
+    private List<ProductReview> reviews = new ArrayList<>();
 
     @Builder.Default
     @Column(name = "is_active")
     private boolean active = true;
 
-    // --- THÊM MỚI TRƯỜNG NÀY ---
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private OffsetDateTime createdAt;
-    // ---------------------------
 
-    // ... (Helper methods giữ nguyên)
+    @UpdateTimestamp
+    @Column(name = "updated_at")
+    private OffsetDateTime updatedAt;
+
     public void addVariant(ProductVariant variant) {
         variants.add(variant);
         variant.setProduct(this);

@@ -1,0 +1,16 @@
+{
+  "index": {
+    "analysis": {
+      "analyzer": {
+        "vn_unaccent_analyzer": {
+          "type": "custom",
+          "tokenizer": "standard",
+          "filter": [
+            "lowercase",
+            "asciifolding" 
+          ]
+        }
+      }
+    }
+  }
+}

@@ -2,95 +2,117 @@ package com.minh.springelectrostore.modules.search.service.impl;
 
 import com.minh.springelectrostore.common.exception.ResourceNotFoundException;
 import com.minh.springelectrostore.modules.product.entity.Product;
+import com.minh.springelectrostore.modules.product.entity.ProductImage;
+import com.minh.springelectrostore.modules.product.entity.ProductVariant;
 import com.minh.springelectrostore.modules.product.repository.ProductRepository;
 import com.minh.springelectrostore.modules.search.document.ProductDocument;
 import com.minh.springelectrostore.modules.search.event.ProductSyncEvent;
-import com.minh.springelectrostore.modules.search.mapper.ProductSyncMapper;
 import com.minh.springelectrostore.modules.search.repository.ProductSearchRepository;
 import com.minh.springelectrostore.modules.search.service.ProductSyncService;
-
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.event.EventListener;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.event.TransactionalEventListener;
+
+import java.math.BigDecimal;
+import java.util.Comparator;
 
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class ProductSyncServiceImpl implements ProductSyncService {
 
-    private final ProductRepository productRepository; // (1) Đọc từ Postgres
-    private final ProductSearchRepository productSearchRepository; // (2) Ghi vào Elasticsearch
-    private final ProductSyncMapper productSyncMapper; // (3) "Thợ dịch"
+    private final ProductRepository productRepository;
+    private final ProductSearchRepository productSearchRepository;
 
-    /**
-     * HÀM QUAN TRỌNG NHẤT (Câu chuyện phỏng vấn)
-     * Lắng nghe sự kiện đồng bộ
-     */
     @Override
-    @Async("taskExecutor") // (4) Kỹ thuật "Pro": Chạy bất đồng bộ
-    // (5) Kỹ thuật "Pro": Chỉ chạy khi GIAO DỊCH (ở ProductService) ĐÃ COMMIT
-    @TransactionalEventListener 
     public void handleProductSyncEvent(ProductSyncEvent event) {
-        log.info("Nhận được sự kiện đồng bộ cho Product ID: {} - Hành động: {}", 
-                 event.getProductId(), event.getAction());
-        
-        try {
-            switch (event.getAction()) {
-                case CREATE_UPDATE:
-                    // Gọi hàm index (tạo/cập nhật)
-                    indexProduct(event.getProductId());
-                    break;
-                case DELETE:
-                    // Gọi hàm delete
-                    deleteProductFromIndex(event.getProductId());
-                    break;
-            }
-        } catch (Exception e) {
-            // Nếu đồng bộ lỗi (ví dụ: Elasticsearch sập), chúng ta log lại
-            // Trong dự án thực tế, đây là lúc để đẩy vào "Retry Queue" (hàng đợi thử lại)
-            log.error("Đồng bộ Elasticsearch thất bại cho Product ID: {}. Lỗi: {}", 
-                      event.getProductId(), e.getMessage());
-        }
+        log.info("Xử lý sự kiện đồng bộ search cho Product ID: {}", event.getProductId());
+        indexProduct(event.getProductId()); 
     }
 
-    /**
-     * Đọc từ Postgres, chuyển đổi, và Ghi vào Elasticsearch
-     */
     @Override
-    @Transactional(readOnly = true) // Cần transaction để đọc Lazy-loading (variants, images)
+    @Transactional(readOnly = true)
     public void indexProduct(Long productId) {
-        // 1. Đọc dữ liệu mới nhất từ CSDL chính (PostgreSQL)
-        // (Phải dùng JOIN FETCH để lấy đủ dữ liệu cho Mapper)
-        Product product = productRepository.findById(productId) 
-                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy sản phẩm " + productId + " để đồng bộ."));
+        log.info("Đang đồng bộ sản phẩm ID: {} sang Elasticsearch...", productId);
 
-        // 2. Kiểm tra nếu sản phẩm không active (bị xóa mềm)
+        Product product = productRepository.findById(productId)
+                .orElseThrow(() -> new ResourceNotFoundException("Product not found with id: " + productId));
+
         if (!product.isActive()) {
             deleteProductFromIndex(productId);
-            log.info("Sản phẩm ID: {} không active, đã xóa khỏi index.", productId);
             return;
         }
 
-        // 3. Dùng "thợ dịch" (Mapper) để phi chuẩn hóa
-        ProductDocument document = productSyncMapper.toDocument(product);
-
-        // 4. Ghi (hoặc cập nhật) vào Elasticsearch
+        ProductDocument document = buildProductDocument(product);
         productSearchRepository.save(document);
-        log.info("Đã đồng bộ (index) thành công Product ID: {} vào Elasticsearch.", document.getId());
+        
+        log.info("-> Đồng bộ thành công ID: {}", productId);
     }
 
-    /**
-     * Xóa khỏi Elasticsearch
-     */
     @Override
     public void deleteProductFromIndex(Long productId) {
-        if (productSearchRepository.existsById(productId)) {
-            productSearchRepository.deleteById(productId);
-            log.info("Đã xóa Product ID: {} khỏi Elasticsearch index.", productId);
+        productSearchRepository.deleteById(productId);
+        log.info("-> Đã xóa sản phẩm ID: {} khỏi Index", productId);
+    }
+
+    private ProductDocument buildProductDocument(Product product) {
+        int totalStock = 0;
+        BigDecimal minPrice = BigDecimal.ZERO;
+
+        // [FIX] Lấy ảnh từ Variants thay vì từ Product trực tiếp
+        String thumbnail = "";
+
+        if (product.getVariants() != null && !product.getVariants().isEmpty()) {
+            totalStock = product.getVariants().stream()
+                    .mapToInt(ProductVariant::getStockQuantity)
+                    .sum();
+
+            minPrice = product.getVariants().stream()
+                    .map(ProductVariant::getPrice)
+                    .min(Comparator.naturalOrder())
+                    .orElse(BigDecimal.ZERO);
+            
+            // Logic tìm ảnh thumbnail: Duyệt qua tất cả variant, lấy ảnh thumbnail đầu tiên tìm thấy
+            thumbnail = product.getVariants().stream()
+                    .flatMap(v -> v.getImages().stream())
+                    .filter(ProductImage::isThumbnail)
+                    .map(ProductImage::getImageUrl)
+                    .findFirst()
+                    .orElse(
+                        // Fallback: Lấy ảnh bất kỳ nếu không có thumbnail
+                        product.getVariants().stream()
+                            .flatMap(v -> v.getImages().stream())
+                            .map(ProductImage::getImageUrl)
+                            .findFirst()
+                            .orElse("")
+                    );
         }
+
+        return ProductDocument.builder()
+                .id(product.getId())
+                .name(product.getName())
+                .slug(product.getSlug())
+                .description(product.getDescription())
+                .price(minPrice)
+                .salePrice(minPrice) 
+                .thumbnail(thumbnail) // [OK] Đã có giá trị từ logic variant ở trên
+                .stockQuantity(totalStock)
+                .soldQuantity(product.getSoldQuantity() != null ? product.getSoldQuantity() : 0L)
+                .averageRating(product.getAverageRating())
+                .reviewCount(product.getReviews() != null ? product.getReviews().size() : 0)
+                .active(product.isActive())
+                .createdAt(product.getCreatedAt() != null ? product.getCreatedAt().toInstant() : null)
+                .updatedAt(product.getUpdatedAt() != null ? product.getUpdatedAt().toInstant() : null)
+                
+                .categoryId(product.getCategory() != null ? product.getCategory().getId() : null)
+                .categoryName(product.getCategory() != null ? product.getCategory().getName() : null)
+                .categorySlug(product.getCategory() != null ? product.getCategory().getSlug() : null)
+                
+                .brandId(product.getBrand() != null ? product.getBrand().getId() : null)
+                .brandName(product.getBrand() != null ? product.getBrand().getName() : null)
+                .brandSlug(product.getBrand() != null ? product.getBrand().getSlug() : null) // Thêm brandSlug cho đủ bộ
+                
+                .build();
     }
 }

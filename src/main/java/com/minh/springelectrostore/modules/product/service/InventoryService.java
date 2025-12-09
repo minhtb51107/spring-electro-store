@@ -13,4 +13,6 @@ public interface InventoryService {
      * @throws com.minh.springelectrostore.common.exception.BadRequestException nếu hết hàng hoặc lỗi lock.
      */
     void reserveStock(Long variantId, Integer quantity);
+    
+    void restoreStock(Long variantId, Integer quantity);
 }

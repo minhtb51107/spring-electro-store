@@ -2,19 +2,15 @@ package com.minh.springelectrostore.modules.search.service;
 
 import com.minh.springelectrostore.modules.product.dto.request.ProductSearchCriteria;
 import com.minh.springelectrostore.modules.product.dto.response.ProductSummaryResponse;
-
+import com.minh.springelectrostore.modules.search.event.ProductSyncEvent;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
 public interface ProductSearchService {
+    void handleProductSyncEvent(ProductSyncEvent event);
+    void deleteProductFromIndex(Long productId);
+    void indexProduct(Long productId);
 
-    /**
-     * Tìm kiếm sản phẩm bằng Elasticsearch, kết hợp full-text search và filtering.
-     *
-     * @param keyword  Từ khóa tìm kiếm (ví dụ: "laptop dell", "ipohne")
-     * @param criteria Các bộ lọc (ví dụ: category, brand, price)
-     * @param pageable Phân trang
-     * @return Trang (Page) các sản phẩm tóm tắt
-     */
+    // [CẬP NHẬT] Hàm search trả về Page, hỗ trợ phân trang
     Page<ProductSummaryResponse> searchProducts(String keyword, ProductSearchCriteria criteria, Pageable pageable);
 }

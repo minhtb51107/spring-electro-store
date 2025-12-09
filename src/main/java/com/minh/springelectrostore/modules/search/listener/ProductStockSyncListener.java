@@ -1,6 +1,5 @@
 package com.minh.springelectrostore.modules.search.listener;
 
-import com.minh.springelectrostore.modules.order.entity.OrderItem;
 import com.minh.springelectrostore.modules.order.event.OrderPlacedEvent;
 import com.minh.springelectrostore.modules.search.worker.ProductSyncWorker;
 import lombok.RequiredArgsConstructor;
@@ -9,8 +8,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
-import java.util.HashSet;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @Component
 @RequiredArgsConstructor
@@ -19,21 +18,17 @@ public class ProductStockSyncListener {
 
     private final ProductSyncWorker productSyncWorker;
 
+    // Chỉ chạy khi Transaction DB đã Commit thành công (Order đã lưu, Tồn kho DB đã trừ)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
-    public void handleStockUpdate(OrderPlacedEvent event) {
-        log.info("Listener nhận sự kiện Order #{} -> Chuyển giao cho ProductSyncWorker", event.getOrder().getId());
+    public void handleOrderPlaced(OrderPlacedEvent event) {
+        log.info("Nhận sự kiện OrderPlacedEvent cho Order #{}", event.getOrder().getId());
 
-        // 1. Trích xuất danh sách ID sản phẩm cần sync
-        Set<Long> productIds = new HashSet<>();
-        if (event.getOrder().getItems() != null) {
-            for (OrderItem item : event.getOrder().getItems()) {
-                productIds.add(item.getProductVariant().getProduct().getId());
-            }
-        }
+        // Lấy danh sách Product ID (distinct) từ các items trong đơn hàng
+        Set<Long> productIds = event.getOrder().getItems().stream()
+                .map(item -> item.getProductVariant().getProduct().getId())
+                .collect(Collectors.toSet());
 
-        // 2. Giao việc cho Worker chạy ngầm
-        if (!productIds.isEmpty()) {
-            productSyncWorker.syncProductsToElasticsearch(event.getOrder().getId(), productIds);
-        }
+        // Kích hoạt worker
+        productSyncWorker.syncProductsToElasticsearch(event.getOrder().getId(), productIds);
     }
 }

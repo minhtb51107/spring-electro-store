@@ -24,34 +24,36 @@ public class Address {
 
     @NotBlank
     @Column(nullable = false)
-    private String receiverName; // Tên người nhận tại địa chỉ này (có thể khác tên User)
+    private String receiverName;
 
     @NotBlank
     @Column(nullable = false)
-    // Regex đơn giản cho số điện thoại VN
     @Pattern(regexp = "(84|0[3|5|7|8|9])+([0-9]{8})\\b", message = "Số điện thoại không hợp lệ")
     private String receiverPhone;
 
     @NotBlank
     @Column(nullable = false)
-    private String streetAddress; // Số nhà, tên đường
+    private String streetAddress;
 
     @NotBlank
     @Column(nullable = false)
-    private String ward; // Phường/Xã
+    private String ward;
 
     @NotBlank
     @Column(nullable = false)
-    private String district; // Quận/Huyện
+    private String district;
 
     @NotBlank
     @Column(nullable = false)
-    private String province; // Tỉnh/Thành phố
+    private String province;
 
     @Builder.Default
     @Column(name = "is_default")
-    private boolean isDefault = false; // Địa chỉ mặc định
+    private boolean isDefault = false;
     
+    @Column(name = "ghn_province_id")
+    private Integer ghnProvinceId;
+
     @Column(name = "ghn_district_id")
     private Integer ghnDistrictId;
 

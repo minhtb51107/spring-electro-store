@@ -15,6 +15,7 @@ import com.minh.springelectrostore.modules.order.event.OrderPlacedEvent;
 import com.minh.springelectrostore.modules.order.mapper.OrderMapper;
 import com.minh.springelectrostore.modules.order.repository.OrderRepository;
 import com.minh.springelectrostore.modules.order.service.OrderService;
+import com.minh.springelectrostore.modules.product.entity.ProductVariant;
 import com.minh.springelectrostore.modules.product.repository.ProductVariantRepository;
 import com.minh.springelectrostore.modules.product.service.InventoryService;
 import com.minh.springelectrostore.modules.promotion.service.VoucherService;
@@ -32,6 +33,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.util.StringUtils; // [Import Mới] Dùng để check text
 
 import java.math.BigDecimal;
 import java.util.HashSet;
@@ -60,7 +62,6 @@ public class OrderServiceImpl implements OrderService {
     public OrderResponse createOrderFromCart(String userEmail, CheckoutRequest request) {
         log.info("Bắt đầu tạo đơn hàng cho user: {}", userEmail);
 
-        // 1. Lấy dữ liệu
         CartResponse cart = cartService.getCart(userEmail);
         if (cart.getItems() == null || cart.getItems().isEmpty()) {
             throw new BadRequestException("Giỏ hàng của bạn đang rỗng.");
@@ -71,37 +72,53 @@ public class OrderServiceImpl implements OrderService {
 
         AddressData addressData = validateAndGetAddress(request, customer);
 
-        // 2. Tính toán
-        BigDecimal totalPrice = cart.getTotalPrice();
+        BigDecimal verifiedTotalPrice = BigDecimal.ZERO;
         
-        // [FIX] Sử dụng biến tạm (tempDiscount) để tính toán
+        for (CartItemResponse item : cart.getItems()) {
+            ProductVariant variant = productVariantRepository.findById(item.getProductVariantId())
+                    .orElseThrow(() -> new BadRequestException("Sản phẩm " + item.getProductName() + " không còn tồn tại."));
+            
+            item.setPrice(variant.getPrice()); 
+            BigDecimal lineTotal = variant.getPrice().multiply(BigDecimal.valueOf(item.getQuantity()));
+            verifiedTotalPrice = verifiedTotalPrice.add(lineTotal);
+        }
+
         BigDecimal tempDiscount = BigDecimal.ZERO;
         if (request.getVoucherCode() != null && !request.getVoucherCode().trim().isEmpty()) {
-            tempDiscount = voucherService.calculateDiscount(request.getVoucherCode(), totalPrice, userEmail);
+            tempDiscount = voucherService.calculateDiscount(request.getVoucherCode(), verifiedTotalPrice, userEmail);
         }
-        // Gán giá trị cuối cùng vào biến này -> Nó trở thành "effectively final" và dùng được trong Lambda
         BigDecimal discountAmount = tempDiscount;
 
         BigDecimal shippingFee;
         try {
-            log.info("Đang gọi GHN API để tính phí ship...");
-            shippingFee = shippingService.calculateShippingFee(
-                addressData.addressObj.getGhnDistrictId(),
-                addressData.addressObj.getGhnWardCode(),
-                cart.getTotalItems() * 500, 
-                cart.getTotalPrice().intValue()
-            );
-            log.info("Phí ship GHN: {}", shippingFee);
+            int totalWeight = cart.getItems().stream().mapToInt(CartItemResponse::getQuantity).sum() * 500;
+            
+            Integer distId = addressData.addressObj.getGhnDistrictId();
+            String wardCode = addressData.addressObj.getGhnWardCode();
+            
+            if (distId == null || wardCode == null) {
+                log.warn("Địa chỉ thiếu thông tin GHN, sử dụng phí ship mặc định.");
+                shippingFee = BigDecimal.valueOf(30000); 
+            } else {
+                shippingFee = shippingService.calculateShippingFee(
+                    distId,
+                    wardCode,
+                    totalWeight,
+                    verifiedTotalPrice.intValue()
+                );
+            }
         } catch (Exception e) {
-            log.error("Lỗi NGHIÊM TRỌNG khi gọi GHN: {}", e.getMessage());
-            throw new BadRequestException("Không thể tính phí vận chuyển: " + e.getMessage());
+            log.error("Lỗi tính phí ship (sẽ dùng default): {}", e.getMessage());
+            shippingFee = BigDecimal.valueOf(30000);
         }
 
-        BigDecimal finalPrice = totalPrice.add(shippingFee).subtract(discountAmount).max(BigDecimal.ZERO);
+        BigDecimal finalPrice = verifiedTotalPrice.add(shippingFee).subtract(discountAmount).max(BigDecimal.ZERO);
 
-        // 3. Mở Transaction
         TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
         AtomicReference<OrderResponse> responseRef = new AtomicReference<>();
+        
+        BigDecimal finalVerifiedTotal = verifiedTotalPrice;
+        BigDecimal finalShippingFee = shippingFee;
         
         Order savedOrder = transactionTemplate.execute(status -> {
             try {
@@ -113,12 +130,10 @@ public class OrderServiceImpl implements OrderService {
                 order.setNotes(request.getNotes());
                 order.setStatus(OrderStatus.PENDING);
                 order.setVoucherCode(request.getVoucherCode());
-                order.setTotalPrice(totalPrice);
                 
-                // Bây giờ discountAmount đã hợp lệ để sử dụng ở đây
+                order.setTotalPrice(finalVerifiedTotal);
                 order.setDiscountAmount(discountAmount);
-                
-                order.setShippingFee(shippingFee);
+                order.setShippingFee(finalShippingFee);
                 order.setFinalPrice(finalPrice);
 
                 Set<OrderItem> orderItems = new HashSet<>();
@@ -142,10 +157,7 @@ public class OrderServiceImpl implements OrderService {
                 }
 
                 cartService.clearCart(userEmail);
-                
-                // Map DTO bên trong Transaction
                 responseRef.set(orderMapper.toOrderResponse(result));
-                
                 return result;
 
             } catch (Exception e) {
@@ -161,7 +173,6 @@ public class OrderServiceImpl implements OrderService {
         return responseRef.get();
     }
     
-    // --- Helper Methods ---
     private static class AddressData {
         Address addressObj;
         String finalName;
@@ -171,6 +182,8 @@ public class OrderServiceImpl implements OrderService {
 
     private AddressData validateAndGetAddress(CheckoutRequest request, Customer customer) {
         AddressData data = new AddressData();
+
+        // CASE 1: Sử dụng địa chỉ có sẵn
         if (request.getAddressId() != null) {
             data.addressObj = addressRepository.findById(request.getAddressId())
                     .orElseThrow(() -> new ResourceNotFoundException("Địa chỉ không tồn tại."));
@@ -179,13 +192,58 @@ public class OrderServiceImpl implements OrderService {
             }
             data.finalName = data.addressObj.getReceiverName();
             data.finalPhone = data.addressObj.getReceiverPhone();
-            data.finalAddress = data.addressObj.getStreetAddress() + ", " + data.addressObj.getWard() + ", " + data.addressObj.getDistrict() + ", " + data.addressObj.getProvince();
-        } else {
-            throw new BadRequestException("Vui lòng chọn địa chỉ từ sổ địa chỉ.");
+            data.finalAddress = data.addressObj.getStreetAddress() + ", " + 
+                                data.addressObj.getWard() + ", " + 
+                                data.addressObj.getDistrict() + ", " + 
+                                data.addressObj.getProvince();
+        } 
+        // CASE 2: Nhập địa chỉ mới
+        else {
+            String recName = request.getNewReceiverName() != null ? request.getNewReceiverName() : request.getCustomerName();
+            String recPhone = request.getNewReceiverPhone() != null ? request.getNewReceiverPhone() : request.getShippingPhone();
+            String streetAddr = request.getNewStreetAddress() != null ? request.getNewStreetAddress() : request.getShippingAddress();
+
+            if (recName == null || recPhone == null || streetAddr == null) {
+                throw new BadRequestException("Vui lòng điền đầy đủ tên, số điện thoại và địa chỉ nhận hàng.");
+            }
+
+            Address newAddress = new Address();
+            newAddress.setCustomer(customer);
+            newAddress.setReceiverName(recName);
+            newAddress.setReceiverPhone(recPhone);
+            
+            // Map GHN fields (ID có thể null)
+            newAddress.setGhnProvinceId(request.getNewProvinceId());
+            newAddress.setGhnDistrictId(request.getNewDistrictId());
+            newAddress.setGhnWardCode(request.getNewWardCode());
+
+            // [FIX CRITICAL] Đặt giá trị mặc định "Khác" nếu không có tên
+            // Điều này giúp vượt qua validation @NotBlank của Entity Address
+            newAddress.setProvince(StringUtils.hasText(request.getNewProvinceName()) ? request.getNewProvinceName() : "Khác");
+            newAddress.setDistrict(StringUtils.hasText(request.getNewDistrictName()) ? request.getNewDistrictName() : "Khác");
+            newAddress.setWard(StringUtils.hasText(request.getNewWardName()) ? request.getNewWardName() : "Khác");
+            
+            newAddress.setStreetAddress(streetAddr);
+            newAddress.setDefault(false);
+
+            data.addressObj = addressRepository.save(newAddress);
+
+            data.finalName = newAddress.getReceiverName();
+            data.finalPhone = newAddress.getReceiverPhone();
+            
+            // Format địa chỉ hiển thị
+            String fullAddr = newAddress.getStreetAddress();
+            // Chỉ nối chuỗi nếu không phải là giá trị mặc định "Khác"
+            if (!"Khác".equals(newAddress.getWard())) fullAddr += ", " + newAddress.getWard();
+            if (!"Khác".equals(newAddress.getDistrict())) fullAddr += ", " + newAddress.getDistrict();
+            if (!"Khác".equals(newAddress.getProvince())) fullAddr += ", " + newAddress.getProvince();
+            
+            data.finalAddress = fullAddr;
         }
         return data;
     }
-    
+
+    // ... (Các phương thức khác giữ nguyên) ...
     @Override
     @Transactional
     public OrderResponse cancelMyOrder(String userEmail, Long orderId) {
@@ -194,11 +252,16 @@ public class OrderServiceImpl implements OrderService {
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đơn hàng."));
 
         if (order.getStatus() != OrderStatus.PENDING) {
-            throw new BadRequestException("Không thể hủy đơn hàng.");
+            throw new BadRequestException("Chỉ có thể hủy đơn hàng khi đang chờ xử lý (PENDING).");
         }
+        
         order.setStatus(OrderStatus.CANCELLED);
+        for (OrderItem item : order.getItems()) {
+            inventoryService.restoreStock(item.getProductVariant().getId(), item.getQuantity());
+        }
+        voucherService.refundVoucher(order.getId());
+        
         Order savedOrder = orderRepository.save(order);
-        voucherService.refundVoucher(savedOrder.getId());
         return orderMapper.toOrderResponse(savedOrder);
     }
     

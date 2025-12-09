@@ -20,7 +20,8 @@
     <include file="changes/013-add-product-rating-fields.xml" relativeToChangelogFile="true"/>
     <include file="changes/014-add-product-created-at.xml" relativeToChangelogFile="true"/>
     <include file="changes/015-add-ghn-fields-to-address-order.xml" relativeToChangelogFile="true"/>
-    
     <include file="changes/016-optimizing-indexes.xml" relativeToChangelogFile="true"/>
+    <include file="changes/017-add-ghn-province-id.xml" relativeToChangelogFile="true"/>
+    <include file="changes/018-add-product-missing-fields.xml" relativeToChangelogFile="true"/>
 
 </databaseChangeLog>

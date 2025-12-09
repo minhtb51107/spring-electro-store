@@ -1,61 +1,81 @@
 package com.minh.springelectrostore.modules.search.document;
 
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
 import org.springframework.data.annotation.Id;
-import org.springframework.data.elasticsearch.annotations.Document;
-import org.springframework.data.elasticsearch.annotations.Field;
-import org.springframework.data.elasticsearch.annotations.FieldType;
+import org.springframework.data.elasticsearch.annotations.*;
 
 import java.math.BigDecimal;
-import java.time.OffsetDateTime; // <--- THÊM IMPORT
+import java.time.Instant;
 
-@Data
+@Getter
+@Setter
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@Document(indexName = "products_index") 
+@Document(indexName = "products")
+@Setting(settingPath = "/static/es-settings.json") 
 public class ProductDocument {
 
     @Id
     private Long id;
 
-    @Field(type = FieldType.Text, analyzer = "standard")
+    @Field(type = FieldType.Text, analyzer = "vn_unaccent_analyzer")
     private String name;
-
-    @Field(type = FieldType.Text, analyzer = "standard")
-    private String description;
 
     @Field(type = FieldType.Keyword)
     private String slug;
 
-    @Field(type = FieldType.Keyword)
-    private String categoryName;
-    
-    @Field(type = FieldType.Keyword)
-    private String categorySlug; 
-
-    @Field(type = FieldType.Keyword)
-    private String brandSlug;
-
-    @Field(type = FieldType.Keyword)
-    private String brandName;
-
     @Field(type = FieldType.Double)
     private BigDecimal price;
 
+    @Field(type = FieldType.Double)
+    private BigDecimal salePrice;
+
     @Field(type = FieldType.Keyword)
-    private String thumbnailUrl;
+    private String thumbnail;
+
+    @Field(type = FieldType.Text, analyzer = "vn_unaccent_analyzer")
+    private String description;
 
     @Field(type = FieldType.Integer)
-    private Integer totalStock;
+    private Integer stockQuantity;
+
+    @Field(type = FieldType.Long)
+    private Long soldQuantity;
 
     @Field(type = FieldType.Boolean)
     private boolean active;
 
-    // --- THÊM MỚI: Trường này bắt buộc để Sort ---
+    @Field(type = FieldType.Double)
+    private Double averageRating;
+
+    @Field(type = FieldType.Integer)
+    private Integer reviewCount;
+
     @Field(type = FieldType.Date)
-    private OffsetDateTime createdAt; 
+    private Instant createdAt;
+
+    @Field(type = FieldType.Date)
+    private Instant updatedAt;
+
+    // --- Category Fields ---
+    @Field(type = FieldType.Long)
+    private Long categoryId;
+    
+    @Field(type = FieldType.Keyword)
+    private String categoryName; 
+    
+    @Field(type = FieldType.Keyword)
+    private String categorySlug;
+    
+    // --- Brand Fields ---
+    @Field(type = FieldType.Long)
+    private Long brandId;
+
+    @Field(type = FieldType.Keyword)
+    private String brandName;
+
+    // [FIX] Thêm trường này để sửa lỗi "Unknown property brandSlug"
+    @Field(type = FieldType.Keyword)
+    private String brandSlug;
 }

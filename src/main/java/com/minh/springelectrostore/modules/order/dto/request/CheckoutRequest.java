@@ -25,4 +25,18 @@ public class CheckoutRequest {
     private String voucherCode; // Mã giảm giá (Optional)
     
     private Long addressId;
+    
+    private String newReceiverName;
+    private String newReceiverPhone;
+    
+    private Integer newProvinceId;   // ID Tỉnh (GHN)
+    private String newProvinceName;
+    
+    private Integer newDistrictId;   // ID Huyện (GHN)
+    private String newDistrictName;
+    
+    private String newWardCode;      // Code Xã (GHN)
+    private String newWardName;
+    
+    private String newStreetAddress; // Số nhà, tên đường
 }
