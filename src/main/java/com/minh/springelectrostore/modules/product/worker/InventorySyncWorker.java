@@ -1,6 +1,7 @@
 package com.minh.springelectrostore.modules.product.worker;
 
 import com.minh.springelectrostore.modules.product.repository.ProductVariantRepository;
+import com.minh.springelectrostore.modules.search.service.ProductSyncService; // <--- Import thêm
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
@@ -14,39 +15,52 @@ import org.springframework.transaction.annotation.Transactional;
 public class InventorySyncWorker {
 
     private final ProductVariantRepository productVariantRepository;
+    private final ProductSyncService productSyncService; // <--- Inject thêm Service này
 
-    /**
-     * Chạy bất đồng bộ: Main thread trả về ngay lập tức,
-     * thread pool sẽ xử lý việc trừ DB sau.
-     */
     @Async("taskExecutor")
-    @Transactional(propagation = Propagation.REQUIRES_NEW) // Luôn chạy transaction mới
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void syncDecreaseStock(Long variantId, Integer quantity) {
         try {
-            // Logic trừ kho DB cũ (vẫn giữ điều kiện >= quantity để an toàn lớp cuối)
-            int updated = productVariantRepository.decreaseStock(variantId, quantity);
-            
-            if (updated == 0) {
-                // Đây là trường hợp Data Inconsistency (Redis còn, DB hết)
-                // Cần log lại để Admin xử lý thủ công hoặc chạy job đối soát
-                log.error("CRITICAL: Lệch tồn kho! Redis cho phép bán nhưng DB thất bại. VariantId: {}", variantId);
-            } else {
-                log.info("[Async-DB] Đồng bộ trừ kho thành công VariantId: {}", variantId);
-            }
+            productVariantRepository.findById(variantId).ifPresent(variant -> {
+                variant.setStockQuantity(variant.getStockQuantity() - quantity);
+                productVariantRepository.save(variant);
+                log.info("ASYNC DB: Đã trừ kho Variant {} đi {}.", variantId, quantity);
+                
+                // Lưu ý: Việc sync ES khi trừ kho đã được ProductStockSyncListener xử lý qua Event OrderPlaced.
+                // Nên ở đây có thể KHÔNG cần gọi sync ES để tránh duplicate action, 
+                // trừ khi bạn muốn chắc chắn 100% (double-check).
+            });
         } catch (Exception e) {
-            log.error("Lỗi khi đồng bộ kho xuống DB: {}", e.getMessage());
-            // TODO: Đẩy vào Queue "Dead Letter" để retry sau
+            log.error("CRITICAL: Lỗi đồng bộ trừ kho xuống DB", e);
         }
     }
 
+    /**
+     * Đồng bộ hoàn kho (khi hủy đơn)
+     * ĐÂY LÀ CHỖ CẦN SỬA
+     */
     @Async("taskExecutor")
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void syncIncreaseStock(Long variantId, Integer quantity) {
         try {
-            productVariantRepository.increaseStock(variantId, quantity);
-            log.info("[Async-DB] Đồng bộ hoàn kho thành công VariantId: {}", variantId);
+            productVariantRepository.findById(variantId).ifPresent(variant -> {
+                // 1. Update SQL
+                variant.setStockQuantity(variant.getStockQuantity() + quantity);
+                productVariantRepository.save(variant);
+                log.info("ASYNC DB: Đã hoàn kho Variant {} thêm {}.", variantId, quantity);
+
+                // 2. [THÊM MỚI] Trigger update Elasticsearch ngay lập tức
+                // Vì Hủy đơn thường không bắn ra Event OrderPlaced, nên phải gọi thủ công ở đây
+                Long productId = variant.getProduct().getId();
+                try {
+                    productSyncService.indexProduct(productId);
+                    log.info("SYNC ES: Đã cập nhật lại tồn kho trên Search cho Product {}", productId);
+                } catch (Exception ex) {
+                    log.error("SYNC ES FAIL: Lỗi cập nhật search index khi hoàn kho", ex);
+                }
+            });
         } catch (Exception e) {
-            log.error("Lỗi khi đồng bộ hoàn kho: {}", e.getMessage());
+            log.error("CRITICAL: Lỗi đồng bộ hoàn kho xuống DB", e);
         }
     }
 }

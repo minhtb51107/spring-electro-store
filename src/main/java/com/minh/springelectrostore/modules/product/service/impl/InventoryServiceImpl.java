@@ -8,7 +8,6 @@ import com.minh.springelectrostore.modules.product.worker.InventorySyncWorker;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-// import org.springframework.transaction.annotation.Transactional; // Bỏ Transactional ở cấp này để tăng tốc
 
 @Service
 @RequiredArgsConstructor
@@ -20,27 +19,27 @@ public class InventoryServiceImpl implements InventoryService {
     private final InventorySyncWorker inventorySyncWorker;
 
     @Override
-    // Không dùng @Transactional ở đây nữa vì Redis không tham gia transaction DB
     public void reserveStock(Long variantId, Integer quantity) {
-        log.info("Bắt đầu giữ hàng (High Concurrency) cho Variant: {}", variantId);
-
-        // 1. [LAZY LOAD] Nếu Redis chưa có key (lần đầu chạy hoặc bị xóa), nạp từ DB lên
+        // 1. [Fail-safe] Nếu Redis chưa có key, load từ DB lên
         if (!inventoryRedisService.hasStockKey(variantId)) {
             log.info("Cache Miss: Nạp tồn kho từ DB lên Redis cho Variant {}", variantId);
             ProductVariant variant = productVariantRepository.findById(variantId)
                     .orElseThrow(() -> new BadRequestException("Sản phẩm không tồn tại"));
-            inventoryRedisService.setStock(variantId, variant.getStockQuantity());
+            // Sử dụng forceUpdate để đảm bảo đồng bộ mới nhất
+            inventoryRedisService.forceUpdateStock(variantId, variant.getStockQuantity());
         }
 
-        // 2. [REDIS GATEKEEPER] Trừ kho trên Redis trước
+        // 2. [REDIS GATEKEEPER] Trừ kho trên Redis
         boolean success = inventoryRedisService.decrementStock(variantId, quantity);
         
         if (!success) {
-            throw new BadRequestException("Sản phẩm đã hết hàng (Redis Check).");
+            // Ném lỗi cụ thể để Controller bắt được và báo "Hết hàng"
+            throw new BadRequestException("Sản phẩm (ID: " + variantId + ") tạm thời hết hàng.");
         }
 
-        // 3. [ASYNC SYNC] Nếu Redis OK -> Đẩy việc trừ DB cho Worker
-        // Main thread sẽ đi tiếp ngay lập tức -> Tạo đơn hàng rất nhanh
+        // 3. [ASYNC SYNC] Đẩy việc trừ DB cho Worker chạy ngầm
+        // Lưu ý: Nếu Transaction DB ở OrderService bị rollback sau bước này, 
+        // ta phải gọi restoreStock thủ công ở OrderService.
         inventorySyncWorker.syncDecreaseStock(variantId, quantity);
     }
 
@@ -51,7 +50,7 @@ public class InventoryServiceImpl implements InventoryService {
         // 1. Hoàn kho Redis ngay lập tức để người khác mua được
         inventoryRedisService.incrementStock(variantId, quantity);
         
-        // 2. Đồng bộ DB bất đồng bộ
+        // 2. Đồng bộ DB bất đồng bộ (trả lại số lượng vào MySQL)
         inventorySyncWorker.syncIncreaseStock(variantId, quantity);
     }
 }

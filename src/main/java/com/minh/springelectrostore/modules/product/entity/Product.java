@@ -82,6 +82,20 @@ public class Product {
     @UpdateTimestamp
     @Column(name = "updated_at")
     private OffsetDateTime updatedAt;
+    
+ // [THÊM MỚI] Danh sách thông số kỹ thuật để phục vụ So sánh
+    @OneToMany(mappedBy = "product", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<ProductAttribute> attributes = new ArrayList<>();
+
+    // Helper method để thêm attribute gọn gàng
+    public void addAttribute(String name, String value) {
+        ProductAttribute attr = ProductAttribute.builder()
+                .name(name)
+                .value(value)
+                .product(this)
+                .build();
+        this.attributes.add(attr);
+    }
 
     public void addVariant(ProductVariant variant) {
         variants.add(variant);

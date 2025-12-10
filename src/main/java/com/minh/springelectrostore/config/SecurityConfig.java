@@ -2,6 +2,7 @@ package com.minh.springelectrostore.config;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.AuthenticationProvider;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
@@ -63,7 +64,7 @@ public class SecurityConfig {
                 .requestMatchers("/api/v1/orders/**").authenticated()
                 .requestMatchers("/api/v1/user/**").authenticated()
                 .requestMatchers("/api/v1/notifications/**").authenticated()
-                
+                .requestMatchers(HttpMethod.GET, "/api/v1/products/compare").permitAll()
                 .anyRequest().authenticated()
             )
             .sessionManagement(session -> session

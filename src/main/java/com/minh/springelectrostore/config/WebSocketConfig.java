@@ -1,8 +1,8 @@
 package com.minh.springelectrostore.config;
 
 import org.springframework.context.annotation.Configuration;
-import org.springframework.core.Ordered; // *** THÊM IMPORT ***
-import org.springframework.core.annotation.Order; // *** THÊM IMPORT ***
+import org.springframework.core.Ordered;
+import org.springframework.core.annotation.Order;
 import org.springframework.messaging.simp.config.ChannelRegistration;
 import org.springframework.messaging.simp.config.MessageBrokerRegistry;
 import org.springframework.web.socket.config.annotation.EnableWebSocketMessageBroker;
@@ -11,33 +11,32 @@ import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerCo
 
 import com.minh.springelectrostore.config.security.WebSocketAuthInterceptor;
 
-import lombok.RequiredArgsConstructor; // *** THÊM IMPORT ***
+import lombok.RequiredArgsConstructor;
 
 @Configuration
 @EnableWebSocketMessageBroker
-@RequiredArgsConstructor // *** THÊM ANNOTATION ***
-@Order(Ordered.HIGHEST_PRECEDENCE + 99) // *** Đảm bảo interceptor chạy trước các interceptor bảo mật mặc định ***
+@RequiredArgsConstructor
+@Order(Ordered.HIGHEST_PRECEDENCE + 99)
 public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
-    private final WebSocketAuthInterceptor webSocketAuthInterceptor; // *** INJECT INTERCEPTOR ***
+    private final WebSocketAuthInterceptor webSocketAuthInterceptor;
 
     @Override
     public void configureMessageBroker(MessageBrokerRegistry config) {
-        config.enableSimpleBroker("/topic");
-        // config.setApplicationDestinationPrefixes("/app"); // Bỏ comment nếu cần gửi message từ client lên server xử lý
+        config.enableSimpleBroker("/topic", "/queue", "/user"); // Thêm /queue và /user cho đầy đủ chuẩn
+        config.setApplicationDestinationPrefixes("/app");
+        config.setUserDestinationPrefix("/user"); // Quan trọng cho tính năng gửi tin nhắn riêng
     }
 
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
         registry.addEndpoint("/ws")
-                .setAllowedOrigins("http://localhost:5173");
-//                .withSockJS();
+                .setAllowedOriginPatterns("*") // Dùng pattern * để dễ dev, hoặc cụ thể "http://localhost:5173"
+                .withSockJS(); // [QUAN TRỌNG] Phải có dòng này để Frontend SockJS kết nối được
     }
 
-    // *** THÊM PHƯƠNG THỨC NÀY ĐỂ ĐĂNG KÝ INTERCEPTOR ***
     @Override
     public void configureClientInboundChannel(ChannelRegistration registration) {
         registration.interceptors(webSocketAuthInterceptor);
     }
-    // *** KẾT THÚC THÊM ***
 }

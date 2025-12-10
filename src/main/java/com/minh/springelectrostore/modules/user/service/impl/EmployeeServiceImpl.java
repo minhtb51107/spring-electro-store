@@ -38,38 +38,42 @@ public class EmployeeServiceImpl implements EmployeeService {
     private final EmployeeMapper employeeMapper;
     private final PasswordEncoder passwordEncoder;
 
- // Version đã sửa lỗi
     @Override
     public EmployeeResponse createEmployee(CreateEmployeeRequest request) {
-        // 1. Validate (Giữ nguyên)
+        // 1. Validate
         if (userRepository.existsByEmail(request.getEmail())) {
             throw new BadRequestException("Email đã được sử dụng.");
         }
         
-        // 2. Tìm các Role từ CSDL (Giữ nguyên)
+        // 2. Tìm các Role từ CSDL
         Set<Role> roles = request.getRoleNames().stream()
                 .map(roleName -> roleRepository.findByName(roleName)
                         .orElseThrow(() -> new BadRequestException("Vai trò không hợp lệ: " + roleName)))
                 .collect(Collectors.toSet());
 
-        // 3. Tạo User (Giữ nguyên)
+        // 3. Tạo User
         User user = new User();
         user.setEmail(request.getEmail());
+        user.setFullname(request.getFullname()); // Đã thêm fullname để fix lỗi null
+        
         user.setPassword(passwordEncoder.encode(request.getPassword()));
         user.setStatus(UserStatus.ACTIVE);
+        
+        // [FIX] Vì User.java khai báo authProvider là String, ta set chuỗi trực tiếp
+        user.setAuthProvider("LOCAL"); 
 
-        // 4. Tạo Employee (Giữ nguyên)
+        // 4. Tạo Employee
         Employee employee = employeeMapper.toEmployeeEntity(request);
         
-        // 5. *** THAY ĐỔI QUAN TRỌNG: Thiết lập quan hệ 2 chiều ***
-        employee.setUser(user);      // Employee biết về User
-        employee.setRoles(roles);    // Employee biết về Roles
-        user.setEmployee(employee);  // User cũng phải biết về Employee
+        // 5. Thiết lập quan hệ 2 chiều
+        employee.setUser(user);
+        employee.setRoles(roles);
+        user.setEmployee(employee);
 
-        // 6. *** THAY ĐỔI QUAN TRỌNG: Lưu User thay vì Employee ***
+        // 6. Lưu User (Cascade sẽ lưu luôn Employee)
         User savedUser = userRepository.save(user);
 
-        // 7. *** THAY ĐỔI QUAN TRỌNG: Trả về response từ đối tượng đã lưu ***
+        // 7. Trả về response
         return employeeMapper.toEmployeeResponse(savedUser.getEmployee());
     }
     
@@ -93,8 +97,13 @@ public class EmployeeServiceImpl implements EmployeeService {
         Employee employee = employeeRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy nhân viên với ID: " + id));
 
+        // Cập nhật thông tin Employee
         if (request.getFullname() != null) {
             employee.setFullname(request.getFullname());
+            // Đồng bộ cập nhật fullname sang User
+            if (employee.getUser() != null) {
+                employee.getUser().setFullname(request.getFullname());
+            }
         }
         if (request.getPosition() != null) {
             employee.setPosition(request.getPosition());
@@ -111,29 +120,30 @@ public class EmployeeServiceImpl implements EmployeeService {
     public void updateEmployeeStatus(Integer id, boolean isActive) {
         Employee employee = employeeRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy nhân viên với ID: " + id));
+        
         employee.setActive(isActive);
+        
+        // [FIX] Sử dụng SUSPENDED thay vì INACTIVE vì Enum UserStatus không có INACTIVE
+        if (employee.getUser() != null) {
+            employee.getUser().setStatus(isActive ? UserStatus.ACTIVE : UserStatus.SUSPENDED);
+        }
+        
         employeeRepository.save(employee);
     }
     
     @Override
     public EmployeeResponse assignRolesToEmployee(Integer employeeId, AssignRolesToEmployeeRequest request) {
-        // 1. Tìm nhân viên trong CSDL
         Employee employee = employeeRepository.findById(employeeId)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy nhân viên với ID: " + employeeId));
 
-        // 2. Tìm tất cả các đối tượng Role hợp lệ từ danh sách tên vai trò
         Set<Role> roles = request.getRoleNames().stream()
                 .map(roleName -> roleRepository.findByName(roleName)
                         .orElseThrow(() -> new BadRequestException("Tên vai trò không hợp lệ: " + roleName)))
                 .collect(Collectors.toSet());
 
-        // 3. Cập nhật lại danh sách vai trò cho nhân viên
         employee.setRoles(roles);
-
-        // 4. Lưu lại thông tin nhân viên đã được cập nhật
         Employee updatedEmployee = employeeRepository.save(employee);
 
-        // 5. Trả về thông tin nhân viên dưới dạng DTO
         return employeeMapper.toEmployeeResponse(updatedEmployee);
     }
 }

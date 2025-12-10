@@ -1,48 +1,38 @@
 package com.minh.springelectrostore.modules.notification.listener;
 
+import com.minh.springelectrostore.modules.notification.service.NotificationService;
 import com.minh.springelectrostore.modules.notification.worker.EmailWorker;
-import com.minh.springelectrostore.modules.order.entity.Order;
 import com.minh.springelectrostore.modules.order.event.OrderPlacedEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.event.EventListener;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
-
-import java.math.BigDecimal;
 
 @Component
 @RequiredArgsConstructor
 @Slf4j
 public class OrderNotificationListener {
 
-    private final EmailWorker emailWorker; // Inject Worker thay vì Service
+    private final EmailWorker emailWorker;
+    private final NotificationService notificationService;
 
+    /**
+     * Lắng nghe sự kiện Order được tạo thành công
+     * phase = AFTER_COMMIT: Chỉ chạy khi transaction DB đã commit xong
+     */
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void handleOrderPlacedEvent(OrderPlacedEvent event) {
-        Order order = event.getOrder();
-        log.info("Listener nhận sự kiện Order #{} -> Chuyển giao cho EmailWorker", order.getId());
+        log.info("Event received: Order #{} placed", event.getOrder().getId());
 
-        // 1. Chuẩn bị dữ liệu
-        String userEmail;
-        if (order.getCustomer() != null && order.getCustomer().getUser() != null) {
-            userEmail = order.getCustomer().getUser().getEmail();
-        } else {
-            return;
-        }
+        String userEmail = event.getOrder().getCustomer().getUser().getEmail();
+        String message = "Đơn hàng #" + event.getOrder().getId() + " đặt thành công! Chúng tôi đang xử lý.";
 
-        String emailBody = String.format(
-            "<h1>Đơn hàng #%d thành công</h1><p>Tổng tiền: %,.0f VND</p>",
-            order.getId(), order.getFinalPrice()
-        );
+        // 1. [REAL-TIME] Gọi đúng hàm sendNotificationToUser như trong Interface hiện tại
+        notificationService.sendNotificationToUser(userEmail, message);
 
-        // 2. Giao việc cho Worker (Hàm này trả về ngay lập tức, Worker chạy ngầm)
-        emailWorker.sendOrderConfirmationEmail(
-            order.getId(),
-            userEmail, 
-            "Xác nhận đơn hàng #" + order.getId(), 
-            emailBody
-        );
+        // 2. [BACKGROUND] Gửi Email (đã fix hàm sendEmail bên trong worker)
+        emailWorker.sendOrderConfirmationEmail(userEmail, event.getOrder());
     }
 }

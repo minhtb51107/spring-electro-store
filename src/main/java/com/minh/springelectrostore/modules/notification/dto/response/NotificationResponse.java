@@ -9,5 +9,10 @@ import java.time.OffsetDateTime;
 public class NotificationResponse {
     private String message;
     private OffsetDateTime timestamp;
-    // Có thể thêm: type (ORDER_UPDATE, PROMOTION...), link (để click vào)
+    
+    private boolean isRead; 
+    
+    // Bạn có thể mở rộng thêm sau này nếu cần:
+    // private String type; // ORDER, SYSTEM, PROMOTION...
+    // private String link; // /orders/123
 }

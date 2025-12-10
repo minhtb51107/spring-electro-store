@@ -5,20 +5,18 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.io.Serializable;
 import java.math.BigDecimal;
-import java.util.List;
+import java.time.Instant;
 import java.util.ArrayList;
+import java.util.List;
 
-/**
- * POJO này đại diện cho TOÀN BỘ giỏ hàng của user.
- * Đây là đối tượng sẽ được serialize thành JSON và lưu vào Redis.
- */
 @Data
+@Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@Builder
-public class CartResponse {
-
+public class CartResponse implements Serializable {
+    
     @Builder.Default
     private List<CartItemResponse> items = new ArrayList<>();
 
@@ -26,5 +24,12 @@ public class CartResponse {
     private BigDecimal totalPrice = BigDecimal.ZERO;
 
     @Builder.Default
-    private int totalItems = 0;
+    private Integer totalItems = 0;
+
+    // [MỚI] Thời điểm cập nhật cuối cùng để tính thời gian "ngủ"
+    private Instant lastUpdatedAt;
+
+    // [MỚI] Đánh dấu đã gửi mail nhắc nhở chưa để tránh spam
+    @Builder.Default
+    private boolean reminderSent = false;
 }

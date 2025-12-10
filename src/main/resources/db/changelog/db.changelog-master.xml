@@ -23,5 +23,8 @@
     <include file="changes/016-optimizing-indexes.xml" relativeToChangelogFile="true"/>
     <include file="changes/017-add-ghn-province-id.xml" relativeToChangelogFile="true"/>
     <include file="changes/018-add-product-missing-fields.xml" relativeToChangelogFile="true"/>
+    
+    <include file="changes/019-create-product-attributes-table.xml" relativeToChangelogFile="true"/>
+    <include file="changes/020-create-wishlists-table.xml" relativeToChangelogFile="true"/>
 
 </databaseChangeLog>
